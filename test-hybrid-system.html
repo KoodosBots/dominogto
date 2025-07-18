@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hybrid Analysis System Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="gto-engine.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #0a0a0a; color: white; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #333; border-radius: 5px; }
+        .pass { background-color: #0f3d2e; border-color: #10b981; }
+        .fail { background-color: #3d1313; border-color: #ef4444; }
+        .info { background-color: #1e293b; border-color: #3b82f6; }
+        pre { background: #1a1a1a; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        button { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 5px; }
+        button:hover { background: #2563eb; }
+        .method-toggle { margin: 20px 0; }
+        select { background: #1a1a1a; color: white; border: 1px solid #333; padding: 5px 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Hybrid Analysis System Test</h1>
+    
+    <div class="method-toggle">
+        <label>Test Analysis Method:</label>
+        <select id="testMethod">
+            <option value="cloud">☁️ Cloud AI (with fallback)</option>
+            <option value="local">⚡ Local GTO Only</option>
+        </select>
+        
+        <label>Local Tier:</label>
+        <select id="testTier">
+            <option value="free">Free (Depth: 2)</option>
+            <option value="basic">Basic (Depth: 5)</option>
+            <option value="pro">Pro (Depth: 10)</option>
+        </select>
+        
+        <button onclick="runHybridTest()">Run Analysis Test</button>
+        <button onclick="runCacheTest()">Test Caching</button>
+        <button onclick="runFallbackTest()">Test Fallback</button>
+    </div>
+    
+    <div id="testResults"></div>
+    
+    <script>
+        // Mock game state for testing
+        const testGameState = {
+            board: [[3, 6], [6, 2]],
+            hand: [[6, 4], [3, 1], [2, 2], [1, 5]],
+            gameType: 'fives',
+            yourScore: 15,
+            opponentScore: 10,
+            passes: 0,
+            draws: 1
+        };
+        
+        let gtoEngine = null;
+        let results = document.getElementById('testResults');
+        
+        // Initialize GTO Engine
+        function initializeGTOEngine() {
+            if (typeof DominoGTOEngine !== 'undefined') {
+                gtoEngine = new DominoGTOEngine();
+                console.log('GTO Engine initialized successfully');
+                return true;
+            } else {
+                console.error('DominoGTOEngine not available');
+                return false;
+            }
+        }
+        
+        // Mock Supabase for testing
+        const mockSupabase = {
+            functions: {
+                invoke: async (functionName, options) => {
+                    // Simulate network delay
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // Mock response
+                    return {
+                        data: {
+                            winProbability: 65,
+                            suggestions: [
+                                {
+                                    title: "Play 6-4",
+                                    description: "Place the 6-4 domino on the right end to score 10 points",
+                                    confidence: 85
+                                },
+                                {
+                                    title: "Control the 6s",
+                                    description: "Focus on maintaining control of the 6 suit",
+                                    confidence: 70
+                                }
+                            ]
+                        },
+                        error: null
+                    };
+                }
+            }
+        };
+        
+        // Simulate analyzeWithSupabase function
+        async function analyzeWithSupabase() {
+            try {
+                if (!gtoEngine) {
+                    initializeGTOEngine();
+                }
+                
+                let positionHash = null;
+                
+                // Check cache first if GTO engine is available
+                if (gtoEngine) {
+                    positionHash = await gtoEngine.hashPosition(
+                        testGameState.board || [],
+                        'player',
+                        testGameState.gameType || 'fives'
+                    );
+                    
+                    const cachedResult = await gtoEngine.checkCache(positionHash, 99);
+                    if (cachedResult && cachedResult.method === 'Cloud AI') {
+                        return {
+                            ...cachedResult,
+                            fromCache: true
+                        };
+                    }
+                }
+                
+                // Call mock Supabase
+                const { data, error } = await mockSupabase.functions.invoke('analyze-domino-position', {
+                    body: { gameState: testGameState }
+                });
+                
+                if (error) throw error;
+                
+                const result = {
+                    winProbability: data.winProbability,
+                    suggestions: data.suggestions,
+                    method: 'Cloud AI',
+                    fromCache: false
+                };
+                
+                // Cache the result
+                if (gtoEngine && positionHash) {
+                    await gtoEngine.storeAnalysis(positionHash, result, 99);
+                }
+                
+                return result;
+                
+            } catch (error) {
+                console.error('Supabase analysis error:', error);
+                return null;
+            }
+        }
+        
+        // Simulate analyzeWithLocalGTO function
+        async function analyzeWithLocalGTO() {
+            if (!gtoEngine) {
+                initializeGTOEngine();
+            }
+            
+            if (!gtoEngine) {
+                throw new Error('GTO Engine not available');
+            }
+            
+            const selectedTier = document.getElementById('testTier')?.value || 'free';
+            const startTime = Date.now();
+            
+            const analysis = await gtoEngine.analyzePosition(testGameState, selectedTier);
+            const analysisTime = Date.now() - startTime;
+            
+            return {
+                winProbability: analysis.winProbability,
+                suggestions: analysis.suggestions,
+                method: 'Local GTO',
+                fromCache: analysis.fromCache,
+                analysisTime: analysisTime,
+                depth: analysis.depth || gtoEngine.tierLimits[selectedTier],
+                tier: selectedTier
+            };
+        }
+        
+        // Run hybrid analysis test
+        async function runHybridTest() {
+            const method = document.getElementById('testMethod').value;
+            const startTime = Date.now();
+            
+            results.innerHTML += `
+                <div class="test-section info">
+                    <h3>Running ${method === 'cloud' ? 'Cloud AI' : 'Local GTO'} Analysis Test...</h3>
+                    <p>Game State: ${JSON.stringify(testGameState, null, 2)}</p>
+                </div>
+            `;
+            
+            try {
+                let result;
+                
+                if (method === 'cloud') {
+                    result = await analyzeWithSupabase();
+                    if (!result) {
+                        console.log('Cloud AI failed, falling back to local GTO');
+                        result = await analyzeWithLocalGTO();
+                        result.fallbackUsed = true;
+                    }
+                } else {
+                    result = await analyzeWithLocalGTO();
+                }
+                
+                const testTime = Date.now() - startTime;
+                const success = result && result.winProbability !== undefined && result.suggestions && result.suggestions.length > 0;
+                
+                results.innerHTML += `
+                    <div class="test-section ${success ? 'pass' : 'fail'}">
+                        <h3>Analysis Test - ${success ? 'PASS' : 'FAIL'}</h3>
+                        <p><strong>Method:</strong> ${result?.method || 'Unknown'}</p>
+                        <p><strong>Win Probability:</strong> ${result?.winProbability}%</p>
+                        <p><strong>Suggestions:</strong> ${result?.suggestions?.length || 0}</p>
+                        <p><strong>From Cache:</strong> ${result?.fromCache ? 'Yes' : 'No'}</p>
+                        <p><strong>Test Time:</strong> ${testTime}ms</p>
+                        ${result?.fallbackUsed ? '<p style="color: #f59e0b;"><strong>⚠️ Fallback Used</strong></p>' : ''}
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    </div>
+                `;
+                
+            } catch (error) {
+                results.innerHTML += `
+                    <div class="test-section fail">
+                        <h3>Analysis Test - FAIL</h3>
+                        <p>Error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Test caching functionality
+        async function runCacheTest() {
+            results.innerHTML += `
+                <div class="test-section info">
+                    <h3>Testing Cache Functionality...</h3>
+                </div>
+            `;
+            
+            try {
+                // First analysis (should be fresh)
+                const startTime1 = Date.now();
+                const result1 = await analyzeWithSupabase();
+                const time1 = Date.now() - startTime1;
+                
+                // Second analysis (should be cached)
+                const startTime2 = Date.now();
+                const result2 = await analyzeWithSupabase();
+                const time2 = Date.now() - startTime2;
+                
+                const cacheWorking = result2.fromCache && time2 < time1;
+                
+                results.innerHTML += `
+                    <div class="test-section ${cacheWorking ? 'pass' : 'fail'}">
+                        <h3>Cache Test - ${cacheWorking ? 'PASS' : 'FAIL'}</h3>
+                        <p><strong>First call:</strong> ${time1}ms (fromCache: ${result1.fromCache})</p>
+                        <p><strong>Second call:</strong> ${time2}ms (fromCache: ${result2.fromCache})</p>
+                        <p><strong>Cache speedup:</strong> ${((time1 - time2) / time1 * 100).toFixed(1)}%</p>
+                    </div>
+                `;
+                
+            } catch (error) {
+                results.innerHTML += `
+                    <div class="test-section fail">
+                        <h3>Cache Test - FAIL</h3>
+                        <p>Error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Test fallback functionality
+        async function runFallbackTest() {
+            results.innerHTML += `
+                <div class="test-section info">
+                    <h3>Testing Fallback Functionality...</h3>
+                    <p>Simulating Supabase failure...</p>
+                </div>
+            `;
+            
+            // Temporarily break Supabase
+            const originalSupabase = mockSupabase.functions.invoke;
+            mockSupabase.functions.invoke = async () => {
+                throw new Error('Simulated network failure');
+            };
+            
+            try {
+                const result = await analyzeWithSupabase();
+                
+                // Restore Supabase
+                mockSupabase.functions.invoke = originalSupabase;
+                
+                if (!result) {
+                    // Test the fallback manually
+                    const fallbackResult = await analyzeWithLocalGTO();
+                    fallbackResult.fallbackUsed = true;
+                    
+                    const fallbackWorking = fallbackResult && fallbackResult.method === 'Local GTO';
+                    
+                    results.innerHTML += `
+                        <div class="test-section ${fallbackWorking ? 'pass' : 'fail'}">
+                            <h3>Fallback Test - ${fallbackWorking ? 'PASS' : 'FAIL'}</h3>
+                            <p><strong>Cloud AI:</strong> Failed (as expected)</p>
+                            <p><strong>Local GTO:</strong> ${fallbackWorking ? 'Success' : 'Failed'}</p>
+                            <p><strong>Fallback Method:</strong> ${fallbackResult?.method}</p>
+                            <p><strong>Win Probability:</strong> ${fallbackResult?.winProbability}%</p>
+                        </div>
+                    `;
+                } else {
+                    results.innerHTML += `
+                        <div class="test-section fail">
+                            <h3>Fallback Test - FAIL</h3>
+                            <p>Expected Supabase to fail, but it succeeded</p>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                // Restore Supabase
+                mockSupabase.functions.invoke = originalSupabase;
+                
+                results.innerHTML += `
+                    <div class="test-section fail">
+                        <h3>Fallback Test - FAIL</h3>
+                        <p>Error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            const engineAvailable = initializeGTOEngine();
+            results.innerHTML = `
+                <div class="test-section ${engineAvailable ? 'pass' : 'fail'}">
+                    <h3>GTO Engine Initialization - ${engineAvailable ? 'PASS' : 'FAIL'}</h3>
+                    <p>Engine available: ${engineAvailable}</p>
+                </div>
+            `;
+        });
+    </script>
+</body>
+</html>

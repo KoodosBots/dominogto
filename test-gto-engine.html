@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GTO Engine Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .pass { background-color: #d4edda; border-color: #c3e6cb; }
+        .fail { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Domino GTO Engine Tests</h1>
+    
+    <div id="testResults"></div>
+    
+    <script src="gto-engine.js"></script>
+    <script>
+        async function runTests() {
+            const results = document.getElementById('testResults');
+            const engine = new DominoGTOEngine();
+            
+            // Test 1: Board Normalization
+            console.log('Testing Board Normalization...');
+            const testBoard1 = [[6, 3], [2, 5], [1, 1]];
+            const testBoard2 = [[3, 6], [5, 2], [1, 1]]; // Same as testBoard1 but with first domino flipped
+            
+            const normalized1 = engine.normalizeBoard(testBoard1);
+            const normalized2 = engine.normalizeBoard(testBoard2);
+            
+            const boardNormTest = JSON.stringify(normalized1) === JSON.stringify(normalized2);
+            results.innerHTML += `
+                <div class="test-section ${boardNormTest ? 'pass' : 'fail'}">
+                    <h3>Test 1: Board Normalization - ${boardNormTest ? 'PASS' : 'FAIL'}</h3>
+                    <p>Original boards should normalize to same representation:</p>
+                    <pre>Board 1: ${JSON.stringify(testBoard1)} → ${JSON.stringify(normalized1)}</pre>
+                    <pre>Board 2: ${JSON.stringify(testBoard2)} → ${JSON.stringify(normalized2)}</pre>
+                    <p>Match: ${JSON.stringify(normalized1) === JSON.stringify(normalized2)}</p>
+                </div>
+            `;
+            
+            // Test 2: Position Hashing
+            console.log('Testing Position Hashing...');
+            const hash1 = await engine.hashPosition(testBoard1, 'player1', 'fives');
+            const hash2 = await engine.hashPosition(testBoard2, 'player1', 'fives');
+            const hash3 = await engine.hashPosition(testBoard1, 'player2', 'fives');
+            
+            const hashTest = hash1 === hash2 && hash1 !== hash3;
+            results.innerHTML += `
+                <div class="test-section ${hashTest ? 'pass' : 'fail'}">
+                    <h3>Test 2: Position Hashing - ${hashTest ? 'PASS' : 'FAIL'}</h3>
+                    <p>Same normalized boards should have same hash, different players should have different hash:</p>
+                    <pre>Hash 1 (player1): ${hash1.substring(0, 16)}...</pre>
+                    <pre>Hash 2 (player1): ${hash2.substring(0, 16)}...</pre>
+                    <pre>Hash 3 (player2): ${hash3.substring(0, 16)}...</pre>
+                    <p>Hash1 === Hash2: ${hash1 === hash2}</p>
+                    <p>Hash1 !== Hash3: ${hash1 !== hash3}</p>
+                </div>
+            `;
+            
+            // Test 3: Legal Move Generation
+            console.log('Testing Legal Move Generation...');
+            const testGameState = {
+                board: [[3, 6]],
+                hand: [[6, 4], [3, 1], [2, 2]],
+                gameType: 'fives'
+            };
+            
+            const legalMoves = engine.generateLegalMoves(testGameState);
+            const expectedMoves = legalMoves.filter(move => 
+                move.type === 'play' && 
+                (move.domino[0] === 6 || move.domino[1] === 6 || move.domino[0] === 3 || move.domino[1] === 3)
+            );
+            
+            const moveGenTest = legalMoves.length > 0 && expectedMoves.length > 0;
+            results.innerHTML += `
+                <div class="test-section ${moveGenTest ? 'pass' : 'fail'}">
+                    <h3>Test 3: Legal Move Generation - ${moveGenTest ? 'PASS' : 'FAIL'}</h3>
+                    <p>Should generate legal moves for hand against board:</p>
+                    <pre>Board: ${JSON.stringify(testGameState.board)}</pre>
+                    <pre>Hand: ${JSON.stringify(testGameState.hand)}</pre>
+                    <pre>Generated Moves: ${JSON.stringify(legalMoves, null, 2)}</pre>
+                </div>
+            `;
+            
+            // Test 4: Cache System
+            console.log('Testing Cache System...');
+            const testAnalysis = { bestMove: [[6, 4]], evaluation: 100 };
+            await engine.storeAnalysis(hash1, testAnalysis, 5);
+            const cachedResult = await engine.checkCache(hash1, 5);
+            
+            const cacheTest = cachedResult && cachedResult.evaluation === testAnalysis.evaluation;
+            results.innerHTML += `
+                <div class="test-section ${cacheTest ? 'pass' : 'fail'}">
+                    <h3>Test 4: Cache System - ${cacheTest ? 'PASS' : 'FAIL'}</h3>
+                    <p>Should store and retrieve analysis from cache:</p>
+                    <pre>Stored: ${JSON.stringify(testAnalysis)}</pre>
+                    <pre>Retrieved: ${JSON.stringify(cachedResult)}</pre>
+                </div>
+            `;
+            
+            // Test 5: Position Analysis
+            console.log('Testing Position Analysis...');
+            try {
+                const analysis = await engine.analyzePosition(testGameState, 'free');
+                const analysisTest = analysis && analysis.bestMove && analysis.winProbability !== undefined;
+                
+                results.innerHTML += `
+                    <div class="test-section ${analysisTest ? 'pass' : 'fail'}">
+                        <h3>Test 5: Position Analysis - ${analysisTest ? 'PASS' : 'FAIL'}</h3>
+                        <p>Should return complete analysis with best move and win probability:</p>
+                        <pre>${JSON.stringify(analysis, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                results.innerHTML += `
+                    <div class="test-section fail">
+                        <h3>Test 5: Position Analysis - FAIL</h3>
+                        <p>Error during analysis:</p>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+            }
+            
+            // Performance Test
+            console.log('Running Performance Test...');
+            const startTime = Date.now();
+            try {
+                await engine.analyzePosition(testGameState, 'free');
+                const analysisTime = Date.now() - startTime;
+                
+                const perfTest = analysisTime < 2000; // Should complete in under 2 seconds for free tier
+                results.innerHTML += `
+                    <div class="test-section ${perfTest ? 'pass' : 'fail'}">
+                        <h3>Performance Test - ${perfTest ? 'PASS' : 'FAIL'}</h3>
+                        <p>Free tier analysis should complete within 2 seconds:</p>
+                        <pre>Analysis time: ${analysisTime}ms</pre>
+                    </div>
+                `;
+            } catch (error) {
+                results.innerHTML += `
+                    <div class="test-section fail">
+                        <h3>Performance Test - FAIL</h3>
+                        <p>Error during performance test:</p>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+            }
+            
+            console.log('All tests completed!');
+        }
+        
+        // Run tests when page loads
+        window.addEventListener('load', runTests);
+    </script>
+</body>
+</html>

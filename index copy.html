@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domino GTO Analyzer - Training-Optimized Edition</title>
+    
+    <!-- External Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Local Stylesheets -->
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/components.css">
+    <link rel="stylesheet" href="styles/responsive.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Domino GTO Analyzer</h1>
+            <p style="color: #888;">AI-Powered Strategy Analysis</p>
+            <div class="user-info" id="userInfo">
+                <span id="userEmail"></span> | 
+                <button class="btn" style="padding: 5px 15px; font-size: 14px;" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <!-- Auth Section -->
+        <div class="auth-section" id="authSection">
+            <h2 id="authTitle">Login</h2>
+            <div class="error-message" id="errorMessage"></div>
+            <div class="success-message" id="successMessage"></div>
+            <form class="auth-form" onsubmit="event.preventDefault(); submitAuth();">
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" class="btn" id="authSubmit">Login</button>
+                <p style="text-align: center; margin-top: 15px;">
+                    <span id="authToggleText">Don't have an account?</span>
+                    <a href="#" onclick="toggleAuthMode()" style="color: #667eea;">
+                        <span id="authToggleLink">Sign up</span>
+                    </a>
+                </p>
+            </form>
+        </div>
+
+        <!-- Game Setup -->
+        <div class="game-setup" id="setupScreen">
+            <h2 style="margin-bottom: 20px;">Game Setup</h2>
+            <div class="setup-grid">
+                <div class="form-group">
+                    <label for="gameType">Game Type</label>
+                    <select id="gameType">
+                        <option value="fives">Fives</option>
+                        <option value="draw">Draw</option>
+                        <option value="block">Block</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="scoreLimit">Score Limit</label>
+                    <select id="scoreLimit">
+                        <option value="100">100 Points</option>
+                        <option value="150">150 Points</option>
+                        <option value="250">250 Points</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="boneCount">Bones per Player</label>
+                    <select id="boneCount">
+                        <option value="7">7 Bones</option>
+                        <option value="9">9 Bones</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="playerMode">Player Mode</label>
+                    <select id="playerMode">
+                        <option value="1v1">1 vs 1</option>
+                        <option value="2v2">2 vs 2</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Hand Selection -->
+            <div class="dominoes-section">
+                <h3>Select Your Hand</h3>
+                <div class="selected-count" id="selectedCount">Selected: 0 / 7</div>
+                <div class="dominoes-grid" id="dominoesGrid"></div>
+                <div class="action-buttons">
+                    <button class="btn" onclick="generateRandomHand()">Random Hand</button>
+                    <button class="btn" onclick="startGame()">Start Game</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Board -->
+        <div class="game-area" id="gameBoardScreen">
+
+            <div class="board-section" id="boardSection">
+                <h3>Game Board</h3>
+                <div class="board-display" id="boardDisplay">
+                    <p style="color: #666;">No dominoes played yet. Drag from your hand or click 'Add to Board'.</p>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 10px;">
+                        <div>
+                            <label style="color: #888; font-size: 14px;">Analysis Mode:</label>
+                            <select id="analysisSpeed" style="background: #1a1a1a; color: white; border: 1px solid #333; padding: 5px 10px; border-radius: 5px; margin-left: 10px;">
+                                <option value="instant">⚡ Instant (Local backup while cloud processes)</option>
+                                <option value="accurate">🎯 Most Accurate (Cloud AI only)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="color: #888; font-size: 14px;">Backup Depth:</label>
+                            <select id="analysisTier" style="background: #1a1a1a; color: white; border: 1px solid #333; padding: 5px 10px; border-radius: 5px; margin-left: 10px;">
+                                <option value="free">Quick (Depth: 2)</option>
+                                <option value="basic">Medium (Depth: 5)</option>
+                                <option value="pro">Deep (Depth: 10)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="font-size: 12px; color: #666; margin-left: 5px;">
+                        💡 All analysis helps train our AI! Instant mode shows local analysis first, then upgrades to cloud AI results.
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <button class="btn" onclick="showAddToBoardModal()">Add to Board</button>
+                    <button class="btn" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);" onclick="analyzePosition()">
+                        AI Analysis
+                    </button>
+                    <button class="btn" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);" onclick="endRound()">End Round</button>
+                </div>
+            </div>
+
+            <div class="score-section">
+                <h3>Current Scores</h3>
+                <div class="score-grid">
+                    <div class="score-card">
+                        <div class="score-value" id="yourScore">0</div>
+                        <div class="score-label">Your Score</div>
+                    </div>
+                    <div class="score-card">
+                        <div class="score-value" id="opponentScore">0</div>
+                        <div class="score-label">Opponent Score</div>
+                    </div>
+                    <div class="score-card" id="openEndsCard">
+                        <div class="score-value" id="openEndsSum">0</div>
+                        <div class="score-label">Open Ends Sum</div>
+                        <div class="score-detail" id="openEndsDetail"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="my-hand-section">
+                <h3>My Hand</h3>
+                <div class="my-hand-display" id="myHandDisplay"></div>
+            </div>
+
+            <div class="stats-panel">
+                <h3>Game Statistics</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="remainingBones">28</div>
+                        <div class="stat-label">Bones in Boneyard</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="playedBones">0</div>
+                        <div class="stat-label">Bones Played</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="drawsAndPasses">0/0</div>
+                        <div class="stat-label">Draws / Passes</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="winProbability">
+                            <span id="winProbValue">50</span>%
+                        </div>
+                        <div class="stat-label">AI Win Prediction</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="analysis-section" id="analysisSection" style="display: none;">
+                <h3>AI Position Analysis</h3>
+                <div id="analysisContent"></div>
+            </div>
+            
+            <div class="action-buttons" style="margin-top: 20px;">
+                <button class="btn" onclick="passTurn()">Pass Turn</button>
+                <button class="btn" onclick="drawDomino()">Draw Domino</button>
+                <button class="btn" onclick="simulateOpponentMove()">Opponent Move</button>
+                <button class="btn" style="background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);" onclick="resetGame()">Reset Game</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add to Board Modal -->
+    <div class="modal" id="addToBoardModal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="document.getElementById('addToBoardModal').style.display='none'">&times;</span>
+            <h3>Add Domino to Board</h3>
+            <div id="modalDominoes" class="dominoes-grid" style="margin-top: 20px;"></div>
+        </div>
+    </div>
+
+    <!-- JavaScript Modules -->
+    <script src="gto-engine.js"></script>
+    <script src="synthetic-training-generator.js"></script>
+    <script src="scripts/proper-board-layout.js"></script>
+    <script src="scripts/supabase-client.js"></script>
+    <script src="scripts/game-logic.js"></script>
+    <script src="scripts/ui-handlers.js"></script>
+    <script src="scripts/analysis-service.js"></script>
+    <script src="scripts/main.js"></script>
+</body>
+</html>

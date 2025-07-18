@@ -1,0 +1,200 @@
+/* Responsive Styles for Domino GTO Analyzer */
+
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+    
+    h1 {
+        font-size: 2em;
+    }
+    
+    .setup-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .dominoes-grid {
+        grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+    }
+    
+    .domino {
+        width: 50px;
+        height: 100px;
+    }
+    
+    .auth-section {
+        margin: 10px;
+        padding: 20px;
+    }
+    
+    .board-section {
+        padding: 10px;
+    }
+    
+    .board-display {
+        padding: 15px;
+        min-height: 350px;
+    }
+    
+    .my-hand-section {
+        padding: 15px;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .btn {
+        width: 100%;
+        max-width: 300px;
+    }
+    
+    .score-display {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .team-score {
+        min-width: 200px;
+        margin-bottom: 15px;
+    }
+    
+    .user-info {
+        position: relative;
+        top: auto;
+        right: auto;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 5px;
+    }
+    
+    h1 {
+        font-size: 1.8em;
+    }
+    
+    .dominoes-grid {
+        grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+        gap: 5px;
+    }
+    
+    .domino {
+        width: 45px;
+        height: 90px;
+        padding: 4px;
+    }
+    
+    .board-domino, .hand-domino {
+        width: 40px;
+        height: 80px;
+        padding: 4px;
+    }
+    
+    .my-hand-display {
+        gap: 5px;
+    }
+    
+    .board-display {
+        padding: 5px;
+        min-height: 250px;
+    }
+    
+    .modal-content {
+        width: 95%;
+        padding: 20px;
+    }
+    
+    .pip {
+        width: 4px;
+        height: 4px;
+    }
+    
+    .domino-half {
+        padding: 2px;
+        gap: 1px;
+    }
+    
+    .stat-value {
+        font-size: 1.5em;
+    }
+    
+    .score-value {
+        font-size: 2em;
+    }
+}
+
+/* Tablet Portrait */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .container {
+        padding: 15px;
+    }
+    
+    .setup-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .dominoes-grid {
+        grid-template-columns: repeat(auto-fill, minmax(55px, 1fr));
+    }
+    
+    .board-display {
+        padding: 25px;
+        min-height: 400px;
+    }
+}
+
+/* Large screens */
+@media (min-width: 1400px) {
+    .container {
+        max-width: 1600px;
+    }
+    
+    .dominoes-grid {
+        grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    }
+    
+    .domino {
+        width: 70px;
+        height: 140px;
+    }
+    
+    .board-domino, .hand-domino {
+        width: 60px;
+        height: 120px;
+    }
+}
+
+/* Print styles */
+@media print {
+    body {
+        background: white;
+        color: black;
+    }
+    
+    .btn, .modal, .user-info {
+        display: none;
+    }
+    
+    .analysis-section, .stats-panel {
+        background: none;
+        border: 1px solid #ccc;
+    }
+    
+    .domino {
+        background: white;
+        border: 2px solid black;
+    }
+}
