@@ -3,6 +3,17 @@
  * No pip rotation - all dominoes use consistent patterns
  */
 
+// CONSISTENT DIMENSION CONSTANTS - Used across all calculations
+const BOARD_CONSTANTS = {
+    DOMINO_WIDTH: 200,        // Base domino width (matches CSS)
+    DOMINO_HEIGHT: 100,       // Base domino height (matches CSS)
+    DOMINO_GAP: 8,           // Gap between dominoes (matches CSS --domino-gap)
+    CHAIN_SPACING: 105,      // Spacing between spinner and chains (matches CSS)
+    CONTAINER_PADDING: 60,   // Conservative padding to prevent overflow
+    MIN_SCALE: 0.4,          // Minimum scale to maintain visibility
+    MAX_SCALE: 1.0           // Maximum scale (never scale up)
+};
+
 // Initialize gameState if it doesn't exist
 if (typeof gameState === 'undefined') {
     window.gameState = {
@@ -274,10 +285,16 @@ function showError(message) {
 
 // Modal functions
 function showAddToBoardModal(selectedDomino = null) {
+    console.log('showAddToBoardModal called with:', selectedDomino);
+    console.log('Current gameState.hand:', gameState.hand);
+    
     const modal = document.getElementById('addToBoardModal');
     const modalDominoes = document.getElementById('modalDominoes');
 
-    if (!modal || !modalDominoes) return;
+    if (!modal || !modalDominoes) {
+        console.error('Modal elements not found!', { modal: !!modal, modalDominoes: !!modalDominoes });
+        return;
+    }
 
     modalDominoes.innerHTML = '';
 
@@ -286,41 +303,51 @@ function showAddToBoardModal(selectedDomino = null) {
     if (selectedDomino) {
         dominoesToShow = [selectedDomino];
     } else {
+        // For testing/setup purposes, show all dominoes not on board
         const allDominoes = generateDominoSet();
         const playedDominoes = gameState.board || [];
-        const playerHand = gameState.hand || [];
 
         dominoesToShow = allDominoes.filter(domino => {
-            const inPlayerHand = playerHand.some(handDomino =>
-                handDomino[0] === domino[0] && handDomino[1] === domino[1]
-            );
-
             const onBoard = playedDominoes.some(boardDomino =>
                 boardDomino[0] === domino[0] && boardDomino[1] === domino[1]
             );
-
-            return !inPlayerHand && !onBoard;
+            return !onBoard;
         });
+        
+        console.log('Showing all remaining dominoes for placement:', dominoesToShow.length, 'available');
     }
 
-    dominoesToShow.forEach(domino => {
-        const element = createSelectableDominoElement(domino);
+    console.log('Dominoes to show in modal:', dominoesToShow);
+    
+    if (dominoesToShow.length === 0) {
+        modalDominoes.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No dominoes available to add.</p>';
+    } else {
+        dominoesToShow.forEach(domino => {
+            const element = createSelectableDominoElement(domino);
 
-        element.draggable = true;
-        element.ondragstart = (e) => {
-            e.dataTransfer.setData('text/plain', JSON.stringify({ domino: domino }));
-            element.classList.add('dragging');
-        };
-        element.ondragend = () => {
-            element.classList.remove('dragging');
-        };
+            element.draggable = true;
+            element.ondragstart = (e) => {
+                e.dataTransfer.setData('text/plain', JSON.stringify({ domino: domino }));
+                element.classList.add('dragging');
+            };
+            element.ondragend = () => {
+                element.classList.remove('dragging');
+            };
 
-        element.onclick = () => {
-            addDominoToBoard(domino);
-            modal.style.display = 'none';
-        };
-        modalDominoes.appendChild(element);
-    });
+            element.onclick = () => {
+                try {
+                    console.log('Adding domino to board from modal:', domino);
+                    addDominoToBoard(domino);
+                    modal.style.display = 'none';
+                } catch (error) {
+                    console.error('Failed to add domino to board:', error);
+                    showError(error.message || 'Cannot place domino on board');
+                    // Keep modal open so user can try again
+                }
+            };
+            modalDominoes.appendChild(element);
+        });
+    }
 
     modal.style.display = 'flex';
 }
@@ -516,12 +543,20 @@ document.addEventListener('DOMContentLoaded', function () {
 function renderProperBoardLayout(container, layoutData) {
     container.innerHTML = '';
 
-    // Calculate scaling based on chain lengths
-    const scale = calculateDominoScale(layoutData);
+    // Create board game container that will be scaled as a unit
+    const gameContainer = document.createElement('div');
+    gameContainer.className = 'domino-game-container';
     
-    // Set CSS custom properties for dynamic scaling directly on container
-    const scaledGap = Math.max(4, 8 * scale);
-    container.style.setProperty('--domino-gap', `${scaledGap}px`);
+    // Calculate container scaling based on viewport and content
+    const containerScale = calculateContainerScale(container, layoutData);
+    
+    // Apply transform scaling to entire container
+    gameContainer.style.transform = `scale(${containerScale})`;
+    gameContainer.style.transformOrigin = 'center center';
+    
+    // Set fixed properties for consistent layout
+    gameContainer.style.setProperty('--domino-gap', '8px');
+    gameContainer.style.setProperty('--chain-spacing', '105px');
 
     // Create main horizontal chain - now just for positioning spinner chains
     const mainChain = document.createElement('div');
@@ -551,8 +586,8 @@ function renderProperBoardLayout(container, layoutData) {
         }
     });
 
-    // Add main chain directly to container instead of nested boardContainer
-    container.appendChild(mainChain);
+    // Add main chain to game container
+    gameContainer.appendChild(mainChain);
 
     // Add spinner chains after main chain is in DOM
     if (layoutData.spinner && spinnerElement) {
@@ -564,7 +599,7 @@ function renderProperBoardLayout(container, layoutData) {
         console.log('=== END SPINNER CHAINS ===\n');
         
         setTimeout(() => {
-            addSpinnerChains(container, spinnerElement, layoutData);
+            addSpinnerChains(gameContainer, spinnerElement, layoutData);
         }, 0);
     } else {
         console.log('=== NO SPINNER CHAINS ===');
@@ -573,25 +608,56 @@ function renderProperBoardLayout(container, layoutData) {
         console.log('=== END NO SPINNER ===\n');
     }
 
-    // Add drop zones
-    renderDropZones(container, layoutData.dropZones);
+    // Add drop zones to game container
+    renderDropZones(gameContainer, layoutData.dropZones);
+    
+    // Add the scaled game container to the main container
+    container.appendChild(gameContainer);
 }
 
-// Calculate dynamic scaling based on chain length (not total dominoes)
-function calculateDominoScale(layoutData) {
-    const baseScale = 0.7; // Start smaller at 140x70px base size
-    const minScale = 0.2; // Can scale down to 20% when chains get long
+// Calculate container scaling based on viewport and content size
+function calculateContainerScale(container, layoutData) {
+    // Get available viewport space with conservative padding
+    const containerRect = container.getBoundingClientRect();
+    const availableWidth = containerRect.width - BOARD_CONSTANTS.CONTAINER_PADDING;
+    const availableHeight = containerRect.height - BOARD_CONSTANTS.CONTAINER_PADDING;
     
-    // Find the longest chain length
+    console.log('=== SCALING CALCULATION ===');
+    console.log('Available space:', { width: availableWidth, height: availableHeight });
+    
+    // Calculate required space for board content using consistent constants
     const mainChainLength = layoutData.mainChain ? layoutData.mainChain.length : 0;
     const topChainLength = layoutData.topChain ? layoutData.topChain.length : 0;
     const bottomChainLength = layoutData.bottomChain ? layoutData.bottomChain.length : 0;
     
-    const maxChainLength = Math.max(mainChainLength, topChainLength, bottomChainLength);
+    console.log('Chain lengths:', { main: mainChainLength, top: topChainLength, bottom: bottomChainLength });
     
-    // Scale down immediately when chains get longer than 1 domino, very aggressively
-    const scaleReduction = Math.max(0, (maxChainLength - 1) * 0.08);
-    return Math.max(minScale, baseScale - scaleReduction);
+    // Calculate required dimensions using accurate constants
+    const requiredWidth = (mainChainLength * BOARD_CONSTANTS.DOMINO_WIDTH) + 
+                         ((mainChainLength - 1) * BOARD_CONSTANTS.DOMINO_GAP);
+    
+    const requiredHeight = BOARD_CONSTANTS.DOMINO_HEIGHT + // Main chain height
+                          (topChainLength > 0 ? (topChainLength * BOARD_CONSTANTS.DOMINO_HEIGHT) + 
+                           ((topChainLength - 1) * BOARD_CONSTANTS.DOMINO_GAP) + BOARD_CONSTANTS.CHAIN_SPACING : 0) +
+                          (bottomChainLength > 0 ? (bottomChainLength * BOARD_CONSTANTS.DOMINO_HEIGHT) + 
+                           ((bottomChainLength - 1) * BOARD_CONSTANTS.DOMINO_GAP) + BOARD_CONSTANTS.CHAIN_SPACING : 0);
+    
+    console.log('Required dimensions:', { width: requiredWidth, height: requiredHeight });
+    
+    // Calculate scale to fit both dimensions
+    const scaleX = requiredWidth > 0 ? availableWidth / requiredWidth : 1;
+    const scaleY = requiredHeight > 0 ? availableHeight / requiredHeight : 1;
+    
+    console.log('Individual scales:', { scaleX, scaleY });
+    
+    // Use the smaller scale to ensure everything fits, with bounds
+    const calculatedScale = Math.min(scaleX, scaleY, BOARD_CONSTANTS.MAX_SCALE);
+    const finalScale = Math.max(BOARD_CONSTANTS.MIN_SCALE, calculatedScale);
+    
+    console.log('Final scale:', finalScale);
+    console.log('=== END SCALING ===\n');
+    
+    return finalScale;
 }
 
 // Create proper domino element for board - SIMPLE VERSION (no pip rotation)
@@ -772,17 +838,35 @@ function addSpinnerChains(container, spinnerElement, layoutData) {
         return;
     }
 
-    const spinnerRect = spinnerElement.getBoundingClientRect();
-    const mainChainRect = mainChain.getBoundingClientRect();
-
-    console.log('Spinner rect:', spinnerRect);
-    console.log('Main chain rect:', mainChainRect);
-
-    const offsetX = spinnerRect.left + spinnerRect.width / 2 - (mainChainRect.left + mainChainRect.width / 2);
-    console.log('Calculated offsetX:', offsetX);
-
-    spinnerChains.style.left = `calc(50% + ${offsetX}px)`;
-    spinnerChains.style.transform = 'translateX(-50%)';
+    // Position spinner chains using consistent constants (matches scaling calculation)
+    const spinnerIndex = layoutData.spinnerIndex;
+    const totalDominoes = layoutData.mainChain.length;
+    
+    // Calculate position using same constants as scaling
+    const totalWidth = (totalDominoes * BOARD_CONSTANTS.DOMINO_WIDTH) + 
+                      ((totalDominoes - 1) * BOARD_CONSTANTS.DOMINO_GAP);
+    const spinnerOffset = (spinnerIndex * BOARD_CONSTANTS.DOMINO_WIDTH) + 
+                         (spinnerIndex * BOARD_CONSTANTS.DOMINO_GAP) + 
+                         (BOARD_CONSTANTS.DOMINO_WIDTH / 2);
+    const relativeLeft = (spinnerOffset / totalWidth) * 100;
+    
+    console.log('=== SPINNER POSITIONING ===');
+    console.log('Spinner index:', spinnerIndex, 'of', totalDominoes);
+    console.log('Using constants:', {
+        dominoWidth: BOARD_CONSTANTS.DOMINO_WIDTH,
+        gap: BOARD_CONSTANTS.DOMINO_GAP
+    });
+    console.log('Calculations:', {
+        totalWidth,
+        spinnerOffset,
+        relativeLeft: relativeLeft + '%'
+    });
+    console.log('=== END SPINNER POSITIONING ===\n');
+    
+    spinnerChains.style.position = 'absolute';
+    spinnerChains.style.left = relativeLeft + '%';
+    spinnerChains.style.top = '50%'; // Center vertically on main chain
+    spinnerChains.style.transform = 'translate(-50%, -50%)';
 
     // Top chain
     if (layoutData.topChain.length > 0) {
@@ -837,16 +921,22 @@ function addSpinnerChains(container, spinnerElement, layoutData) {
     console.log('=== END ADDING SPINNER CHAINS ===\n');
 }
 
-// Render drop zones
+// Render drop zones with dynamic positioning based on actual chain endpoints
 function renderDropZones(container, dropZones) {
     const dropZonesContainer = document.createElement('div');
     dropZonesContainer.className = 'drop-zones-container';
+
+    // Calculate dynamic positions after DOM elements are in place
+    setTimeout(() => {
+        calculateDropZonePositions(container, dropZones, dropZonesContainer);
+    }, 10);
 
     dropZones.forEach(zone => {
         const dropZone = document.createElement('div');
         dropZone.className = `drop-zone ${zone.position}`;
         dropZone.textContent = zone.value;
         dropZone.title = `Connect ${zone.value} here`;
+        dropZone.style.position = 'absolute'; // Ensure absolute positioning
 
         // Add drag and drop support to drop zones
         dropZone.ondragover = (e) => {
@@ -895,6 +985,51 @@ function renderDropZones(container, dropZones) {
     });
 
     container.appendChild(dropZonesContainer);
+}
+
+// Calculate dynamic drop zone positions using logical layout (works with scaling)
+function calculateDropZonePositions(container, dropZones, dropZonesContainer) {
+    console.log('=== CALCULATING DROP ZONE POSITIONS (LOGICAL) ===');
+    
+    // Use CSS positioning instead of getBoundingClientRect to work with scaling
+    dropZones.forEach((zone, index) => {
+        const dropZone = dropZonesContainer.children[index];
+        if (!dropZone) return;
+        
+        // Position drop zones using CSS instead of calculated coordinates
+        // This works properly with container scaling
+        switch (zone.position) {
+            case 'left':
+                dropZone.style.left = '20px';
+                dropZone.style.top = '50%';
+                dropZone.style.transform = 'translateY(-50%)';
+                break;
+                
+            case 'right':
+                dropZone.style.right = '20px';
+                dropZone.style.top = '50%';
+                dropZone.style.transform = 'translateY(-50%)';
+                dropZone.style.left = 'auto'; // Clear left positioning
+                break;
+                
+            case 'top':
+                dropZone.style.left = '50%';
+                dropZone.style.top = '20px';
+                dropZone.style.transform = 'translateX(-50%)';
+                break;
+                
+            case 'bottom':
+                dropZone.style.left = '50%';
+                dropZone.style.bottom = '20px';
+                dropZone.style.top = 'auto'; // Clear top positioning
+                dropZone.style.transform = 'translateX(-50%)';
+                break;
+        }
+        
+        console.log(`Drop zone ${zone.position} positioned using CSS layout`);
+    });
+    
+    console.log('=== END DROP ZONE POSITIONING ===\n');
 }
 
 // Setup drag and drop for board
@@ -965,12 +1100,19 @@ function showPlayableHand(connectionValue, targetPosition = null) {
         playableDominoes.forEach(domino => {
             const element = createSelectableDominoElement(domino);
             element.onclick = () => {
-                if (targetPosition) {
-                    addDominoToBoard(domino, targetPosition);
-                } else {
-                    addDominoToBoard(domino);
+                try {
+                    console.log(`Adding playable domino [${domino[0]}|${domino[1]}] to position:`, targetPosition);
+                    if (targetPosition) {
+                        addDominoToBoard(domino, targetPosition);
+                    } else {
+                        addDominoToBoard(domino);
+                    }
+                    document.getElementById('addToBoardModal').style.display = 'none';
+                } catch (error) {
+                    console.error('Failed to add playable domino to board:', error);
+                    showError(error.message || 'Cannot place domino at this position');
+                    // Keep modal open so user can try again
                 }
-                document.getElementById('addToBoardModal').style.display = 'none';
             };
             modalDominoes.appendChild(element);
         });

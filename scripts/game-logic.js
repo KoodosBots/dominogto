@@ -76,7 +76,8 @@ function startGame() {
     
     // Switch to game screen
     document.getElementById('setupScreen').style.display = 'none';
-    document.getElementById('gameBoardScreen').style.display = 'block';
+    document.getElementById('gameBoardScreen').style.display = 'flex';
+    document.getElementById('gameBoardScreen').classList.add('active');
     
     updateGameDisplay();
 }

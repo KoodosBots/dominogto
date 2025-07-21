@@ -147,8 +147,8 @@
     background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(10px);
     border-radius: 20px;
-    padding: 30px;
-    margin-bottom: 30px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
     border: 1px solid rgba(255, 255, 255, 0.1);
     display: none;
 }
@@ -163,6 +163,13 @@
 .game-area {
     display: none;
     animation: fadeIn 0.5s ease;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.game-area.active {
+    display: flex;
 }
 
 /* Domino Components */
@@ -254,26 +261,38 @@
 .board-section {
     background: rgba(255, 255, 255, 0.03);
     border-radius: 20px;
-    padding: 30px;
-    margin-bottom: 20px;
+    padding: 1rem;
+    margin-bottom: 0.5rem;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    min-height: 200px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* Allow shrinking */
 }
 
 .board-display {
-    min-height: 400px;
-    padding: 20px;
+    flex: 1;
+    min-height: 0; /* Allow shrinking */
+    padding: 1rem;
     background: rgba(0, 0, 0, 0.3);
     border-radius: 15px;
     border: 2px dashed rgba(255, 255, 255, 0.1);
     position: relative;
-    overflow: visible;
+    overflow: hidden; /* Prevent overflow */
     display: flex;
     align-items: center;
     justify-content: center;
     width: 100%;
-    max-width: 100%;
-    gap: var(--domino-gap, 8px);
+}
+
+/* Game container that gets scaled as a unit */
+.domino-game-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s ease;
+    transform-origin: center center;
 }
 
 /* Main chain container - now just for positioning spinner chains */
@@ -291,11 +310,14 @@
     z-index: 15;
     pointer-events: none;
     overflow: visible;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
 }
 
 .top-chain {
     position: absolute;
-    bottom: calc(100% + 120px);
+    bottom: 105px; /* Fixed 105px spacing from spinner */
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -307,7 +329,7 @@
 
 .bottom-chain {
     position: absolute;
-    top: calc(100% + 50px);
+    top: 105px; /* Fixed 105px spacing from spinner */
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -467,9 +489,10 @@
     background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(10px);
     border-radius: 20px;
-    padding: 20px;
-    margin-bottom: 20px;
+    padding: 1rem;
+    margin-bottom: 0.5rem;
     border: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
 }
 
 .my-hand-display {
